@@ -1,0 +1,9 @@
+__pycache__
+.vscode
+build
+dist
+videos
+venv
+*.mp3
+*.mp4
+*.spec

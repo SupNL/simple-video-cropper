@@ -1,0 +1,21 @@
+ffmpeg-python==0.2.0
+  - future [required: Any, installed: 0.18.2]
+imageio==2.9.0
+  - numpy [required: Any, installed: 1.20.3]
+  - pillow [required: Any, installed: 8.2.0]
+imageio-ffmpeg==0.4.4
+opencv-python==4.5.2.52
+  - numpy [required: >=1.19.3, installed: 1.20.3]
+PIMS==0.5
+  - numpy [required: >=1.7, installed: 1.20.3]
+  - six [required: >=1.8, installed: 1.16.0]
+  - slicerator [required: >=0.9.8, installed: 1.0.0]
+    - six [required: Any, installed: 1.16.0]
+pygame==2.0.1
+pyinstaller==4.3
+  - altgraph [required: Any, installed: 0.17]
+  - pefile [required: >=2017.8.1, installed: 2021.5.24]
+    - future [required: Any, installed: 0.18.2]
+  - pyinstaller-hooks-contrib [required: >=2020.6, installed: 2021.1]
+  - pywin32-ctypes [required: >=0.2.0, installed: 0.2.0]
+  - setuptools [required: Any, installed: 56.0.0]
