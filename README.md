@@ -5,7 +5,9 @@ this is a program that should crop (trim) your video
 tl;dr was just experimenting new stuff with python gui to create a program for a friend
 
 **this code is a mess**, this is all just kinda experimental
+
 was trying to develop with tkinter for the first time, and i actually had to do alot of stuff (probably in the worst way possible) just to make this program work
+
 yes, i probably shouldn't have overload the videoplayer file and separate it into more modules
 i do not plan to keep changing this program
 
