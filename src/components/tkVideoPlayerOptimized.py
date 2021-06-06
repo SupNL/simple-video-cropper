@@ -29,7 +29,6 @@ class VideoPlayer(Frame):
         Frame.__init__(self, root)
 
         bottomFrame = Frame(root)
-        range_validation = bottomFrame.register(self.validate)
         bottomFrame.pack(side=BOTTOM)
         frame = Frame(root)
         frame.pack(side=BOTTOM)
@@ -46,7 +45,7 @@ class VideoPlayer(Frame):
 
         self.buttons.append(Button(frame, text='Play', height=2, bg='#cfdbaf', command=self._resume, state="disabled"))
         self.buttons.append(Button(frame, text='Pause', height=2, bg='#cfdbaf',  command=self._pause, state="disabled"))
-        self.buttons.append(Button(frame, text='From beginning', height=2, bg='#cfdbaf',  command=self._restart, state="disabled"))
+        self.buttons.append(Button(frame, text='Start from left trim', height=2, bg='#cfdbaf',  command=self._restart, state="disabled"))
         self.buttons.append(Button(frame, text='Open...', height=2, bg='#cfdbaf',  command=self._open_video))
         self.buttons.append(Button(frame, text='Export...', height=2, bg='#cfdbaf',  command=self._export_video, state="disabled"))
 
@@ -66,14 +65,27 @@ class VideoPlayer(Frame):
                 Frame(topFrame, width=200, height=50).pack(side=LEFT)
             Frame(frame, width=20).pack(side=LEFT)
             button.pack(side=LEFT)
+
+        digit_validation = bottomFrame.register(self.validate_digit)
+
+        Label(bottomFrame, text="Video height (minimum value 40)\nVideo width will be automatically calculated\nHeight must be a multiple of 2").pack(side=TOP)
+
+        self.height_value = StringVar(root)
+        self.height_spinbox = Spinbox(bottomFrame, from_ = 40, to=9999999, textvariable=self.height_value)
+        self.height_spinbox.pack(side=TOP)
+        Label(bottomFrame, height=1).pack(side=TOP)
         
         Label(bottomFrame, text="Compression (CRF) value, higher values = higher compression (worse quality)\nRecommended quality = 16 to 20 (minimum value is 0, maximum value is 51)\nThis is only used when exporting the video").pack(side=TOP)
-        Label(bottomFrame, height=1).pack(side=BOTTOM)
+        
         self.crf_value = StringVar(root, 20)
-        self.spinbox = Spinbox(bottomFrame, from_ = 0, to = 52, textvariable=self.crf_value)
-        self.spinbox.pack(side=BOTTOM)
-        self.spinbox.config(validate="key", validatecommand=(range_validation, '%P'))
-        self.spinbox.bind("<KeyRelease>", self.verify_padding_zero)
+        self.crf_spinbox = Spinbox(bottomFrame, from_ = 0, to = 52, textvariable=self.crf_value)
+        self.crf_spinbox.pack(side=TOP)
+        Label(bottomFrame, height=1).pack(side=TOP)
+
+        self.crf_spinbox.config(validate="key", validatecommand=(digit_validation, '%P'))
+        self.height_spinbox.config(validate="key", validatecommand=(digit_validation, '%P'))
+        self.height_spinbox.bind("<KeyRelease>", self.verify_width)
+        self.crf_spinbox.bind("<KeyRelease>", self.verify_padding_zero)
        
         self.frame_offset = 0
         self.seconds_offset = 0
@@ -169,24 +181,33 @@ class VideoPlayer(Frame):
             except:
                 pass
             self.update()
-        
 
-    def verify_padding_zero(self, event):
+    def set_after_crf(self):
         value = self.crf_value.get()
         if len(value) == 0:
             self.crf_value.set("0")
-        elif len(value) > 1 and value[0] == "0":
-            value = value.replace('0', '')
-            self.crf_value.set(value)
+    
+    def set_after_width(self):
+        value = self.height_value.get()
+        if len(value) == 0 or int(value) < 40:
+            self.height_value.set("40")
+        
+    def verify_padding_zero(self, event):
+        value = self.crf_value.get()
+        if len(value) == 0:
+            self.after(800, self.set_after_crf)
+        elif len(value) > 1:
+            self.crf_value.set(int(value))
 
-    def validate(self, user_input):
+    def verify_width(self, event):
+        value = self.height_value.get()
+        if len(value) == 0 or len(value) == 1:
+            self.after(800, self.set_after_width)
+        elif len(value) > 1:
+            self.height_value.set(int(value))
+
+    def validate_digit(self, user_input):
         if user_input.isdigit():
-            minval = int(self.spinbox.config('from')[4])
-            maxval = int(self.spinbox.config('to')[4])
-
-            if int(user_input) not in range(minval, maxval):
-                return False
-
             return True
         elif len(user_input) == 0:
             return True
@@ -236,6 +257,11 @@ class VideoPlayer(Frame):
                 height = self.cap.get(CAP_PROP_FRAME_HEIGHT)
                 width = self.cap.get(CAP_PROP_FRAME_WIDTH)
                 self.cap.release()
+
+                self.height_value.set(int(height))
+
+                self.original_height = int(height)
+                self.original_width = int(width)
 
                 if height > 480:
                     aspect_ratio = width / height
@@ -298,6 +324,10 @@ class VideoPlayer(Frame):
     def _export_video(self):
         self.pause_video = True
         music.pause()
+        if int(self.height_value.get()) % 2 != 0:
+            messagebox.showerror("Error", "Width is not a multiple of 2. Please type another value.")
+            return
+        export_width = self.height_value.get()
         filename = filedialog.asksaveasfilename(filetypes=FILE_TYPES, defaultextension=Path(self.original_filename).suffix)
         if filename != "":
             loading = self.create_loading_message("Exporting your video, please wait.")
@@ -306,8 +336,9 @@ class VideoPlayer(Frame):
             slider = self.master.children["!slider"]
             timer1 = slider.getLowestBarValue()
             timer2 = slider.getHighestBarValue()
+
             try:
-                ffmpeg.input(self.original_filename).output(filename, ss=timer1, vcodec="libx264", crf=int(self.crf_value.get()), preset="superfast", acodec="copy", to=timer2, avoid_negative_ts="make_zero").overwrite_output().run(capture_stderr=True)
+                ffmpeg.input(self.original_filename).output(filename, vf=f"scale=-2:{export_width}", ss=timer1, vcodec="libx264", crf=int(self.crf_value.get()), preset="superfast", acodec="copy", to=timer2, avoid_negative_ts="make_zero").overwrite_output().run(capture_stderr=True)
                 
                 loading.destroy()
                 messagebox.showinfo("Complete", "Video succesfully exported")
