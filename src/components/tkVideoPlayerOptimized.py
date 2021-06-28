@@ -12,6 +12,7 @@ from PIL import Image, ImageTk
 
 AUDIO_PREVIEW_FILENAME = "audio_output_preview.mp3"
 VIDEO_PREVIEW_FILENAME = "video_output_preview.mp4"
+AUDIO_SAMPLE_RATE = 22050
 
 FILE_TYPES = [
     ('MP4', '*.mp4'),
@@ -22,9 +23,9 @@ FILE_TYPES = [
 ]
 
 class VideoPlayer(Frame):
-    FRAME_CUTOFF = 3
+    FRAME_CUTOFF = 6
     def __init__(self, root):
-        pygame.mixer.pre_init(44100, -16, 1, 1024)
+        pygame.mixer.pre_init(AUDIO_SAMPLE_RATE, -16, 1, 1024)
         pygame.mixer.init()
         Frame.__init__(self, root)
 
@@ -231,7 +232,7 @@ class VideoPlayer(Frame):
         print("Loading frames...")
         self.imageList = []
 
-        self.imageList = pims.Video(VIDEO_PREVIEW_FILENAME)
+        self.imageList = pims.Video(self.original_filename)
         
         t1 = time()
         print(f"Frames loaded. Total: {len(self.imageList)}")
@@ -250,7 +251,7 @@ class VideoPlayer(Frame):
             t0 = time()
             print("Generating audio preview")
             try:
-                ffmpeg.input(self.original_filename).output(AUDIO_PREVIEW_FILENAME, ar=44100).overwrite_output().run(capture_stderr=True)
+                ffmpeg.input(self.original_filename).output(AUDIO_PREVIEW_FILENAME, ar=AUDIO_SAMPLE_RATE).overwrite_output().run(capture_stderr=True)
                 print(f"Audio preview generation successful.\nTime taken: {time()-t0}s.")
 
                 self.cap = VideoCapture(self.original_filename)
@@ -263,17 +264,17 @@ class VideoPlayer(Frame):
                 self.original_height = int(height)
                 self.original_width = int(width)
 
-                if height > 480:
+                if height > 300:
                     aspect_ratio = width / height
-                    width = 480 * aspect_ratio
+                    width = 300 * aspect_ratio
                     if width % 2 != 0:
                         width += 1
-                    height = 480
+                    height = 300
 
                 t0 = time()
-                print("Compressing preview video")
-                ffmpeg.input(self.original_filename).filter('scale', width, height).output(VIDEO_PREVIEW_FILENAME,vcodec="libx264", crf=30, preset="ultrafast").overwrite_output().run(capture_stderr=True)
-                print(f"Compression successful.\nTime taken: {time()-t0}s.")
+                #print("Compressing preview video")
+                #ffmpeg.input(self.original_filename).filter('scale', width, height).output(VIDEO_PREVIEW_FILENAME,vcodec="libx264", crf=44, preset="ultrafast").overwrite_output().run(capture_stderr=True)
+                #print(f"Compression successful.\nTime taken: {time()-t0}s.")
             except ffmpeg.Error as e:
                 error_list = e.stderr.decode('utf-8').split("\n")
                 error_list.pop()
@@ -292,7 +293,8 @@ class VideoPlayer(Frame):
                 loading.destroy()
                 return
 
-            self.cap = VideoCapture(VIDEO_PREVIEW_FILENAME)
+            self.cap = VideoCapture(self.original_filename)
+            self.original_fps = self.cap.get(CAP_PROP_FPS)
             self.fps = self.cap.get(CAP_PROP_FPS) / VideoPlayer.FRAME_CUTOFF
             frame_count = int(self.cap.get(CAP_PROP_FRAME_COUNT))
             self.seconds = (frame_count / self.fps)
@@ -320,6 +322,7 @@ class VideoPlayer(Frame):
 
             loading.destroy()
             self.update()
+
 
     def _export_video(self):
         self.pause_video = True
@@ -413,7 +416,7 @@ class VideoPlayer(Frame):
 
     def process_image(self, image):
         image = Image.fromarray(image)
-        image.thumbnail((800, 800), Image.ANTIALIAS)
+        image.thumbnail([600, 500], Image.NEAREST)
         image = ImageTk.PhotoImage(image)
         self.imgMem.append(image)
         if len(self.imgMem) > 1:
