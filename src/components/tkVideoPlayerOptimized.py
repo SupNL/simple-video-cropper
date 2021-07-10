@@ -6,7 +6,7 @@ from numpy import arange as nparange
 from cv2 import VideoCapture, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_FRAME_HEIGHT, CAP_PROP_FRAME_WIDTH
 from pygame.mixer import music, init as init_mixer
 import pygame.mixer
-from tkinter import messagebox, filedialog, Frame, Spinbox, StringVar, Toplevel, Button, Label, BOTTOM, TOP, LEFT, RIGHT
+from tkinter import Checkbutton, messagebox, filedialog, Frame, Spinbox, StringVar, Toplevel, Button, Label, IntVar, BOTTOM, TOP, LEFT, RIGHT
 from imageio import get_reader
 from PIL import Image, ImageTk
 
@@ -79,14 +79,29 @@ class VideoPlayer(Frame):
         Label(bottomFrame, text="Compression (CRF) value, higher values = higher compression (worse quality)\nRecommended quality = 16 to 20 (minimum value is 0, maximum value is 51)\nThis is only used when exporting the video").pack(side=TOP)
         
         self.crf_value = StringVar(root, 20)
-        self.crf_spinbox = Spinbox(bottomFrame, from_ = 0, to = 52, textvariable=self.crf_value)
+        self.crf_spinbox = Spinbox(bottomFrame, from_ = 0, to = 51, textvariable=self.crf_value)
         self.crf_spinbox.pack(side=TOP)
         Label(bottomFrame, height=1).pack(side=TOP)
 
+        Label(bottomFrame, text="FPS").pack(side=TOP)
+        
+        self.fps_value = StringVar(root, 60)
+        self.fps_spinbox = Spinbox(bottomFrame, from_ = 1, to = 60, textvariable=self.fps_value)
+        self.fps_spinbox.pack(side=TOP)
+        Label(bottomFrame, height=1).pack(side=TOP)
+
+        self.has_audio = IntVar()
+        self.has_audio.set(1)
+        self.sound_check = Checkbutton(bottomFrame, text='Save audio?',variable=self.has_audio, onvalue=1, offvalue=0)
+        self.sound_check.pack(side=TOP)
+
+        self.fps_spinbox.config(validate="key", validatecommand=(digit_validation, '%P'))
         self.crf_spinbox.config(validate="key", validatecommand=(digit_validation, '%P'))
         self.height_spinbox.config(validate="key", validatecommand=(digit_validation, '%P'))
-        self.height_spinbox.bind("<KeyRelease>", self.verify_width)
+        
+        self.height_spinbox.bind("<KeyRelease>", self.verify_height)
         self.crf_spinbox.bind("<KeyRelease>", self.verify_padding_zero)
+        self.fps_spinbox.bind("<KeyRelease>", self.verify_fps)
        
         self.frame_offset = 0
         self.seconds_offset = 0
@@ -187,25 +202,41 @@ class VideoPlayer(Frame):
         value = self.crf_value.get()
         if len(value) == 0:
             self.crf_value.set("0")
+        elif int(value) > 51:
+            self.crf_value.set("51")
     
-    def set_after_width(self):
+    def set_after_height(self):
         value = self.height_value.get()
         if len(value) == 0 or int(value) < 40:
             self.height_value.set("40")
+
+    def set_after_fps(self):
+        value = self.fps_value.get()
+        if len(value) == 0 or int(value) < 1:
+            self.fps_value.set("1")
+        elif int(value) > 60:
+            self.fps_value.set("60")
+
+    def verify_height(self, event):
+        value = self.height_value.get()
+        if len(value) == 0 or len(value) == 1:
+            self.after(800, self.set_after_height)
+        elif len(value) > 1:
+            self.height_value.set(int(value))
+
+    def verify_fps(self, event):
+        value = self.fps_value.get()
+        if len(value) == 0 or int(value) < 1 or int(value) > 60:
+            self.after(800, self.set_after_fps)
+        elif len(value) > 1:
+            self.fps_value.set(int(value))
         
     def verify_padding_zero(self, event):
         value = self.crf_value.get()
-        if len(value) == 0:
+        if len(value) == 0 or int(value) > 51:
             self.after(800, self.set_after_crf)
         elif len(value) > 1:
             self.crf_value.set(int(value))
-
-    def verify_width(self, event):
-        value = self.height_value.get()
-        if len(value) == 0 or len(value) == 1:
-            self.after(800, self.set_after_width)
-        elif len(value) > 1:
-            self.height_value.set(int(value))
 
     def validate_digit(self, user_input):
         if user_input.isdigit():
@@ -295,6 +326,7 @@ class VideoPlayer(Frame):
 
             self.cap = VideoCapture(self.original_filename)
             self.original_fps = self.cap.get(CAP_PROP_FPS)
+            self.fps_value.set(str(round(self.original_fps)))
             self.fps = self.cap.get(CAP_PROP_FPS) / VideoPlayer.FRAME_CUTOFF
             frame_count = int(self.cap.get(CAP_PROP_FRAME_COUNT))
             self.seconds = (frame_count / self.fps)
@@ -341,8 +373,12 @@ class VideoPlayer(Frame):
             timer2 = slider.getHighestBarValue()
 
             try:
-                ffmpeg.input(self.original_filename).output(filename, vf=f"scale=-2:{export_width}", ss=timer1, vcodec="libx264", crf=int(self.crf_value.get()), preset="superfast", acodec="copy", to=timer2, avoid_negative_ts="make_zero").overwrite_output().run(capture_stderr=True)
-                
+                if self.has_audio.get() == 1:
+                    ffmpeg.input(self.original_filename).output(filename, vf=f"scale=-2:{export_width},fps={self.fps_value.get()}", ss=timer1, vcodec="libx264", crf=int(self.crf_value.get()), preset="superfast", acodec="copy", to=timer2, avoid_negative_ts="make_zero").overwrite_output().run(capture_stderr=True)
+                else:
+                    print('eae')
+                    ffmpeg.input(self.original_filename).output(filename, vf=f"scale=-2:{export_width},fps={self.fps_value.get()}", ss=timer1, vcodec="libx264", crf=int(self.crf_value.get()), preset="superfast", to=timer2, avoid_negative_ts="make_zero", an=None).overwrite_output().run(capture_stderr=True)
+
                 loading.destroy()
                 messagebox.showinfo("Complete", "Video succesfully exported")
             except ffmpeg.Error as e:
