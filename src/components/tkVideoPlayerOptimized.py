@@ -1,3 +1,4 @@
+import os
 import ffmpeg
 import pims
 from pathlib import Path
@@ -274,6 +275,7 @@ class VideoPlayer(Frame):
         music.pause()
         video = filedialog.askopenfile(mode = 'r', filetypes=FILE_TYPES)
         if video is not None:
+            self.audio_available = True
             music.unload()
             loading = self.create_loading_message("Loading your video, please wait.")
             self.original_filename = video.name
@@ -282,8 +284,12 @@ class VideoPlayer(Frame):
             t0 = time()
             print("Generating audio preview")
             try:
-                ffmpeg.input(self.original_filename).output(AUDIO_PREVIEW_FILENAME, ar=AUDIO_SAMPLE_RATE).overwrite_output().run(capture_stderr=True)
-                print(f"Audio preview generation successful.\nTime taken: {time()-t0}s.")
+                try:
+                    ffmpeg.input(self.original_filename).output(AUDIO_PREVIEW_FILENAME, ar=AUDIO_SAMPLE_RATE).overwrite_output().run(capture_stderr=True)
+                    print(f"Audio preview generation successful.\nTime taken: {time()-t0}s.")
+                except Exception:
+                    self.audio_available = False
+                    print("No audio on video, skipping audio preview")
 
                 self.cap = VideoCapture(self.original_filename)
                 height = self.cap.get(CAP_PROP_FRAME_HEIGHT)
@@ -333,7 +339,8 @@ class VideoPlayer(Frame):
             self.cap.release()
             
             music.unload()
-            music.load(AUDIO_PREVIEW_FILENAME)
+            if self.audio_available:
+                music.load(AUDIO_PREVIEW_FILENAME)
 
             self.duration = self.seconds / VideoPlayer.FRAME_CUTOFF
 
@@ -376,7 +383,6 @@ class VideoPlayer(Frame):
                 if self.has_audio.get() == 1:
                     ffmpeg.input(self.original_filename).output(filename, vf=f"scale=-2:{export_width},fps={self.fps_value.get()}", ss=timer1, vcodec="libx264", crf=int(self.crf_value.get()), preset="superfast", acodec="copy", to=timer2, avoid_negative_ts="make_zero").overwrite_output().run(capture_stderr=True)
                 else:
-                    print('eae')
                     ffmpeg.input(self.original_filename).output(filename, vf=f"scale=-2:{export_width},fps={self.fps_value.get()}", ss=timer1, vcodec="libx264", crf=int(self.crf_value.get()), preset="superfast", to=timer2, avoid_negative_ts="make_zero", an=None).overwrite_output().run(capture_stderr=True)
 
                 loading.destroy()
@@ -430,8 +436,9 @@ class VideoPlayer(Frame):
         self.set_offset(slider.getLowestBarValue())
         self.restart = True
         self.pause_video = False
-        music.rewind()
-        music.play(start=self.seconds_offset)
+        if self.audio_available:
+            music.rewind()
+            music.play(start=self.seconds_offset)
 
 
     def _pause(self):
@@ -447,8 +454,9 @@ class VideoPlayer(Frame):
             # should start from the green play
             self.restart = True
             self.pause_video = False
-            music.rewind()
-            music.play(start=self.seconds_offset)
+            if self.audio_available:
+                music.rewind()
+                music.play(start=self.seconds_offset)
 
     def process_image(self, image):
         image = Image.fromarray(image)
