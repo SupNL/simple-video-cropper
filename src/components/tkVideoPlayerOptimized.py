@@ -286,6 +286,7 @@ class VideoPlayer(Frame):
             try:
                 try:
                     ffmpeg.input(self.original_filename).output(AUDIO_PREVIEW_FILENAME, ar=AUDIO_SAMPLE_RATE).overwrite_output().run(capture_stderr=True)
+                    self.audio_available = True
                     print(f"Audio preview generation successful.\nTime taken: {time()-t0}s.")
                 except Exception:
                     self.audio_available = False
